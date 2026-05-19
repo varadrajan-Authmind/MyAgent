@@ -106,6 +106,44 @@ def fetch_python_docs(topic: str) -> str:
         return f"Python docs error: {str(e)}"
 
 @tool
+def vault_get_secret(secret_path: str) -> str:
+    """
+    Retrieve a secret from HashiCorp Vault before accessing any AWS resource.
+    Always call this first to fetch credentials or config before doing S3 operations.
+    secret_path: path to the secret e.g. 'kv/vtiger_crm', 'kv/myagent_config'
+    """
+    try:
+        import hvac
+        import os
+        vault_token = os.environ.get("VAULT_TOKEN")
+        if not vault_token:
+            return "Vault error: VAULT_TOKEN environment variable not set"
+        client = hvac.Client(
+            url="http://10.59.39.79:8200",
+            token=vault_token
+        )
+        if not client.is_authenticated():
+            return "Vault authentication failed"
+        try:
+            response = client.secrets.kv.v2.read_secret_version(
+                path=secret_path,
+                mount_point="secrets"
+            )
+            data = response.get("data", {}).get("data", {})
+            keys = list(data.keys())
+            return f"Successfully retrieved secret from Vault path '{secret_path}'. Keys found: {keys}"
+        except Exception:
+            response = client.secrets.kv.v1.read_secret(
+                path=secret_path,
+                mount_point="secrets"
+            )
+            data = response.get("data", {})
+            keys = list(data.keys())
+            return f"Successfully retrieved secret from Vault path '{secret_path}'. Keys found: {keys}"
+    except Exception as e:
+        return f"Vault error: {str(e)}"
+
+@tool
 def s3_read(key: str) -> str:
     """
     Read a file from the authmind-agentcore-telemetry S3 bucket.
@@ -149,7 +187,7 @@ def get_or_create_agent():
         _agent = Agent(
             model=load_model(),
             system_prompt="You are a helpful assistant. Use tools when appropriate.",
-            tools=[fetch_w3schools, fetch_python_docs, s3_read, s3_write]
+            tools=[fetch_w3schools, fetch_python_docs, vault_get_secret, s3_read, s3_write]
         )
     return _agent
 
