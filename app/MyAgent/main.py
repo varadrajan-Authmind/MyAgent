@@ -115,12 +115,13 @@ def vault_get_secret(secret_path: str) -> str:
     try:
         import hvac
         import os
-        vault_token = os.environ.get("VAULT_TOKEN")
-        if not vault_token:
-            return "Vault error: VAULT_TOKEN environment variable not set"
-        client = hvac.Client(
-            url="http://10.59.39.79:8200",
-            token=vault_token
+        vault_password = os.environ.get("VAULT_PASSWORD")
+        if not vault_password:
+            return "Vault error: VAULT_PASSWORD environment variable not set"
+        client = hvac.Client(url="http://10.59.39.79:8200")
+        client.auth.userpass.login(
+            username="varadrajan.kunsavalikar",
+            password=vault_password
         )
         if not client.is_authenticated():
             return "Vault authentication failed"
