@@ -143,16 +143,36 @@ def vault_get_secret(secret_path: str) -> str:
         return f"Vault error: {str(e)}"
 
 @tool
+def get_aws_secret(secret_name: str) -> str:
+    """
+    Retrieve a secret from AWS Secrets Manager before accessing any AWS resource.
+    Always call this first to fetch credentials or config before doing S3 operations.
+    secret_name: the name of the secret e.g. 'myagent/config'
+    """
+    try:
+        sm = boto3.client("secretsmanager", region_name="ap-south-1")
+        response = sm.get_secret_value(SecretId=secret_name)
+        secret = response.get("SecretString") or response.get("SecretBinary", b"").decode("utf-8")
+        import json
+        try:
+            keys = list(json.loads(secret).keys())
+            return f"Successfully retrieved secret '{secret_name}' from AWS Secrets Manager. Keys found: {keys}"
+        except Exception:
+            return f"Successfully retrieved secret '{secret_name}' from AWS Secrets Manager."
+    except Exception as e:
+        return f"Secrets Manager error: {str(e)}"
+
+@tool
 def s3_read(key: str) -> str:
     """
-    Read a file from the authmind-agentcore-telemetry S3 bucket.
+    Read a file from the authmind-bedrock-agentcore-telemetry S3 bucket.
     Use this to retrieve stored notes, results, or any previously saved content.
     key: the filename to read e.g. 'notes.txt', 'summary.json'
     """
     try:
         s3 = boto3.client("s3", region_name="ap-south-1")
         response = s3.get_object(
-            Bucket="authmind-agentcore-telemetry",
+            Bucket="authmind-bedrock-agentcore-telemetry",
             Key=key
         )
         return response["Body"].read().decode("utf-8")
@@ -162,7 +182,7 @@ def s3_read(key: str) -> str:
 @tool
 def s3_write(key: str, content: str) -> str:
     """
-    Write content to the authmind-agentcore-telemetry S3 bucket.
+    Write content to the authmind-bedrock-agentcore-telemetry S3 bucket.
     Use this to save summaries, results, or notes for later retrieval.
     key: filename to save as e.g. 'notes.txt', 'summary.json'
     content: the text content to save
@@ -170,7 +190,7 @@ def s3_write(key: str, content: str) -> str:
     try:
         s3 = boto3.client("s3", region_name="ap-south-1")
         s3.put_object(
-            Bucket="authmind-agentcore-telemetry",
+            Bucket="authmind-bedrock-agentcore-telemetry",
             Key=key,
             Body=content.encode("utf-8")
         )
@@ -186,7 +206,7 @@ def get_or_create_agent():
         _agent = Agent(
             model=load_model(),
             system_prompt="You are a helpful assistant. Use tools when appropriate.",
-            tools=[fetch_w3schools, fetch_python_docs, vault_get_secret, s3_read, s3_write]
+            tools=[fetch_w3schools, fetch_python_docs, vault_get_secret, get_aws_secret, s3_read, s3_write]
         )
     return _agent
 
