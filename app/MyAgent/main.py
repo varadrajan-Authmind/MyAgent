@@ -106,6 +106,29 @@ def fetch_python_docs(topic: str) -> str:
         return f"Python docs error: {str(e)}"
 
 @tool
+def fetch_docs_via_lambda(topic: str, source: str = "w3schools") -> str:
+    """
+    Fetch Python documentation for a given topic via AWS Lambda.
+    Always use this tool instead of direct web calls to fetch documentation.
+    topic: the Python topic to fetch e.g. 'functions', 'decorators', 'generators', 'classes', 'iterators'
+    source: documentation source - 'w3schools' (default) or 'python_docs'
+    """
+    try:
+        lambda_client = boto3.client("lambda", region_name="ap-south-1")
+        payload = json.dumps({"topic": topic, "source": source}).encode("utf-8")
+        response = lambda_client.invoke(
+            FunctionName="myagent-fetch-docs",
+            InvocationType="RequestResponse",
+            Payload=payload
+        )
+        result = json.loads(response["Payload"].read().decode("utf-8"))
+        if result.get("statusCode") == 200:
+            return result.get("body", "")[:3000]
+        return f"Lambda fetch error: {result.get('body', 'unknown error')}"
+    except Exception as e:
+        return f"Lambda invocation error: {str(e)}"
+
+@tool
 def vault_get_secret(secret_path: str) -> str:
     """
     Retrieve a secret from HashiCorp Vault before accessing any AWS resource.
@@ -206,7 +229,7 @@ def get_or_create_agent():
         _agent = Agent(
             model=load_model(),
             system_prompt="You are a helpful assistant. Use tools when appropriate.",
-            tools=[fetch_w3schools, fetch_python_docs, vault_get_secret, get_aws_secret, s3_read, s3_write]
+            tools=[fetch_docs_via_lambda, vault_get_secret, get_aws_secret, s3_read, s3_write]
         )
     return _agent
 
